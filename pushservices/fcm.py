@@ -2,11 +2,10 @@
 # -*- coding: utf-8 -*-
 
 from . import PushService
-from oauth2client.service_account import ServiceAccountCredentials
+from google.auth.transport.requests import AuthorizedSession
+from google.oauth2 import service_account
 from util import json_decode, json_encode
-import datetime
 import logging
-import tornado
 
 BASE_URL = "https://fcm.googleapis.com"
 SCOPES = ["https://www.googleapis.com/auth/firebase.messaging"]
@@ -27,10 +26,13 @@ class FCMClient(PushService):
         self.jsonkey = kwargs["jsonkey"]
         self.appname = kwargs["appname"]
         self.instanceid = kwargs["instanceid"]
-        jsonData = json_decode(self.jsonkey)
-        self.oauth_client = ServiceAccountCredentials.from_json_keyfile_dict(
-            jsonData, SCOPES
+        service_account_info = json_decode(self.jsonkey)
+        credentials = service_account.Credentials.from_service_account_info(
+            service_account_info,
+            scopes=SCOPES
         )
+        self.authed_session = AuthorizedSession(credentials)
+
         self.endpoint = "%s/v1/projects/%s/messages:send" % (BASE_URL, self.project_id)
 
     def format_values(self, data=None):
@@ -47,7 +49,7 @@ class FCMClient(PushService):
             elif isinstance(v, dict):
                 try:
                     formatted[k] = json_encode(self.format_values(v))
-                except:
+                except Exception:
                     logging.error("Error treating field " + k)
 
             elif v is not None:
@@ -84,8 +86,7 @@ class FCMClient(PushService):
         if apns:
             payload["message"]["apns"] = apns
 
-        text = json_encode(payload)
-        return text
+        return payload
 
     async def process(self, **kwargs):
         fcm = kwargs.get("fcm", {})
@@ -93,22 +94,9 @@ class FCMClient(PushService):
         token = kwargs["token"]
 
         if not token:
-            raise FCMException(400, "devicde token is required")
+            raise FCMException(400, "device token is required")
 
         body = self.build_request(token, alert, fcm=fcm)
         logging.info(body)
-
-        access_token, expires_in = self.oauth_client.get_access_token()
-        logging.info(
-            "access token expiring in %s..." % datetime.timedelta(seconds=expires_in)
-        )
-        headers = {
-            "Authorization": "Bearer %s" % access_token,
-            "Content-Type": "application/json; UTF-8",
-        }
-
-        http = tornado.httpclient.AsyncHTTPClient()
-        response = await http.fetch(
-            self.endpoint, method="POST", body=body, headers=headers
-        )
+        response = self.authed_session.request('POST', self.endpoint, json=body)
         return response
