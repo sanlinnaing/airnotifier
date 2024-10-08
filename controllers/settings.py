@@ -57,7 +57,7 @@ from pushservices.fcm import FCMClient
 from pushservices.apns import ApnsClient
 import requests
 import traceback
-from controllers.base import *
+from controllers.base import WebBaseHandler
 
 
 @route(r"/applications/([^/]+)/settings[\/]?")
@@ -126,7 +126,7 @@ class AppHandler(WebBaseHandler):
                     app["wnstokenexpiry"] = int(responsedata["expires_in"]) + int(
                         time.time()
                     )
-                    ## Update connections too
+                    # Update connections too
                     self.wnsconnections[app["shortname"]] = []
                     wns = WNSClient(self.masterdb, app, 0)
                     self.wnsconnections[app["shortname"]].append(wns)

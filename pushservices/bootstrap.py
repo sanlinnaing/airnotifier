@@ -1,5 +1,5 @@
 import logging
-from .apns import *
+from .apns import ApnsClient
 from .clickatell import *
 from .fcm import FCMClient
 from .mpns import MPNSClient
@@ -63,9 +63,8 @@ def init_messaging_agents(masterdb):
         if "wnsclientid" in app and "wnsclientsecret" in app and "shortname" in app:
             try:
                 wns = WNSClient(masterdb, app, 0)
+                services["wns"][appname].append(wns)
             except Exception as ex:
                 logging.error(ex)
                 continue
-            services["wns"][appname].append(wns)
-
     return services
