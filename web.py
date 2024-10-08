@@ -6,7 +6,11 @@ from constants import (
     RELEASE,
     VERSION,
 )
-from uimodules import *
+from uimodules import (
+    AppSideBar,
+    NavBar,
+    TabBar
+)
 import datetime
 import os
 import logging
@@ -117,15 +121,16 @@ class WebApplication(tornado.web.Application):
                             extra=extra,
                             apns=kwargs.get("apns", {}),
                         )
-                elif token["device"] == DEVICE_TYPE_FCM or token["device"] == DEVICE_TYPE_ANDROID:
+                elif (token["device"].endswith(DEVICE_TYPE_FCM) or
+                      token["device"] == DEVICE_TYPE_ANDROID):
                     await fcm.process(
                         token=t, alert=alert, extra=extra, fcm=kwargs.get("fcm", {})
                     )
-                elif token["device"] == DEVICE_TYPE_WNS:
-                    if wns is not None:
-                        wns.process(
-                            token=t, alert=alert, extra=extra, wns=kwargs.get("wns", {})
-                        )
+                elif (token["device"] == DEVICE_TYPE_WNS and
+                      wns is not None):
+                    wns.process(
+                        token=t, alert=alert, extra=extra, wns=kwargs.get("wns", {})
+                    )
         except Exception as ex:
             logging.error(ex)
 

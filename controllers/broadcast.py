@@ -27,8 +27,8 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import tornado.web
-
-from controllers.base import *
+from routes import route
+from controllers.base import WebBaseHandler
 
 
 @route(r"/applications/([^/]+)/broadcast")
@@ -41,8 +41,10 @@ class AppBroadcastHandler(WebBaseHandler):
             raise tornado.web.HTTPError(500)
         self.render("app_broadcast.html", app=app, sent=False)
 
+    # TODO: to check and implement for performance in case there are much devices
+    # to send the broadcast message.
     @tornado.web.authenticated
-    def post(self, appname):
+    async def post(self, appname):
         self.appname = appname
         app = self.masterdb.applications.find_one({"shortname": appname})
         if not app:
@@ -50,7 +52,7 @@ class AppBroadcastHandler(WebBaseHandler):
         alert = self.get_argument("notification").strip()
         sound = "default"
         channel = "default"
-        self.application.send_broadcast(
+        await self.application.send_broadcast(
             self.appname, self.db, channel=channel, alert=alert, sound=sound
         )
         self.render("app_broadcast.html", app=app, sent=True)
