@@ -224,7 +224,7 @@ class APIBaseHandler(tornado.web.RequestHandler):
         log["info"] = strip_tags(info)
         log["level"] = strip_tags(level)
         log["created"] = int(time.time())
-        self.db.logs.insert(log)
+        self.db.logs.insert_one(log)
 
 
 class EntityBuilder(object):
@@ -250,7 +250,7 @@ class TokenV1Handler(APIBaseHandler):
             return
 
         try:
-            result = self.db.tokens.remove({"token": token})
+            result = self.db.tokens.delete_one({"token": token})
             if result["n"] == 0:
                 self.send_response(NOT_FOUND, dict(status="Token does't exist"))
             else:
@@ -278,7 +278,7 @@ class TokenV1Handler(APIBaseHandler):
             else:
                 try:
                     binascii.unhexlify(devicetoken)
-                except Exception as ex:
+                except Exception:
                     self.send_response(BAD_REQUEST, dict(error="Invalid token"))
         else:
             # if it's not ios then we force FCM type device here
@@ -288,18 +288,22 @@ class TokenV1Handler(APIBaseHandler):
 
         token = EntityBuilder.build_token(devicetoken, device, self.appname, channel)
         try:
-            result = self.db.tokens.update(
+            result = self.db.tokens.update_one(
                 {"device": device, "token": devicetoken, "appname": self.appname},
-                token,
+                {"$set": token},
                 upsert=True,
             )
             # result
             # {u'updatedExisting': True, u'connectionId': 47, u'ok': 1.0, u'err': None, u'n': 1}
-            if result["updatedExisting"]:
+            if result.modified_count > 0:
                 self.send_response(OK, dict(status="token exists"))
-            else:
+            elif result.upserted_id is not None:
                 self.send_response(OK, dict(status="ok"))
                 self.add_to_log("Add token", devicetoken)
+            elif result.matched_count > 0:
+                self.send_response(OK, dict(status="ok"))
+                self.add_to_log("No update because of same token", devicetoken)
+
         except Exception as ex:
             self.add_to_log("Cannot add token", devicetoken, "warning")
             self.send_response(INTERNAL_SERVER_ERROR, dict(error=str(ex)))
@@ -325,7 +329,7 @@ class UsersHandler(APIBaseHandler):
             if cursor:
                 self.send_response(BAD_REQUEST, dict(error="email already exists"))
             else:
-                userid = self.db.users.insert(user)
+                userid = self.db.users.insert_one(user)
                 self.add_to_log("Add user", email)
                 self.send_response(OK, {"userid": str(userid)})
         except Exception as ex:
@@ -372,7 +376,7 @@ class ObjectHandler(APIBaseHandler):
         """
         self.classname = classname
         self.objectid = ObjectId(objectId)
-        result = self.db[self.collection].remove({"_id": self.objectid})
+        result = self.db[self.collection].delete_one({"_id": self.objectid})
         self.send_response(OK, dict(result=result))
 
     def put(self, classname, objectId):
@@ -381,7 +385,7 @@ class ObjectHandler(APIBaseHandler):
         self.classname = classname
         data = json_decode(self.request.body)
         self.objectid = ObjectId(objectId)
-        result = self.db[self.collection].update({"_id": self.objectid}, data)
+        result = self.db[self.collection].update_one({"_id": self.objectid}, {"$set": data})
 
     @property
     def collection(self):
@@ -404,7 +408,7 @@ class ClassHandler(APIBaseHandler):
             col["collection"] = self.classname
             col["created"] = int(time.time())
             self.add_to_log("Register collection", self.classname)
-            self.db.objects.insert(col)
+            self.db.objects.insert_one(col)
 
         collectionname = "%s%s" % (options.collectionprefix, self.classname)
         return collectionname
@@ -439,8 +443,8 @@ class ClassHandler(APIBaseHandler):
             self.send_response(BAD_REQUEST, ex)
 
         self.add_to_log("Add object to %s" % self.classname, data)
-        objectId = self.db[self.collection].insert(data)
-        self.send_response(OK, dict(objectId=objectId))
+        object_id = self.db[self.collection].insert_one(data)
+        self.send_response(OK, dict(objectId=object_id))
 
 
 @route(r"/accesskeys/")
@@ -470,7 +474,7 @@ class AccessKeysV1Handler(APIBaseHandler):
             | API_PERMISSIONS["send_broadcast"][0]
         )
         key["key"] = md5(str(uuid.uuid4())).hexdigest()
-        self.db.keys.insert(key)
+        self.db.keys.insert_one(key)
         self.send_response(OK, dict(accesskey=key["key"]))
 
     def verify_request(self):

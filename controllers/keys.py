@@ -28,9 +28,11 @@
 import sys, os
 import tornado.web
 from api import API_PERMISSIONS
-from controllers.base import *
-from util import *
+from controllers.base import WebBaseHandler
+from util import create_access_key
+from routes import route
 import logging
+import time
 
 
 @route(r"/applications/([^/]+)/keys")
@@ -55,7 +57,7 @@ class AppAccessKeysHandler(WebBaseHandler):
             )
             return
         if key_to_be_deleted:
-            self.db.keys.remove({"key": key_to_be_deleted})
+            self.db.keys.delete_one({"key": key_to_be_deleted})
             self.redirect("/applications/%s/keys" % appname)
         self.render(
             "app_keys.html",
@@ -87,9 +89,9 @@ class AppAccessKeysHandler(WebBaseHandler):
             # Alternative key generator, this is SHORT
             # crc = binascii.crc32(str(uuid.uuid4())) & 0xffffffff
             # key['key'] = '%08x' % crc
-            keyObjectId = self.db.keys.insert(key)
+            self.db.keys.insert_one(key)
             self.redirect("/applications/%s/keys" % appname)
         else:
             key["key"] = self.get_argument("accesskey").strip()
-            self.db.keys.update({"key": key["key"]}, key)
+            self.db.keys.update_one({"key": key["key"]}, {"$set": key})
             self.redirect("/applications/%s/keys" % appname)

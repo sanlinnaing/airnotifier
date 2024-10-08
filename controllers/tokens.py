@@ -27,8 +27,10 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import tornado.web
-
-from controllers.base import *
+from bson import ObjectId
+from controllers.base import WebBaseHandler
+from pymongo import DESCENDING
+from routes import route
 
 
 @route(r"/applications/([^/]+)/tokens")
@@ -44,7 +46,7 @@ class AppTokensHandler(WebBaseHandler):
 
         token_id = self.get_argument("delete", None)
         if token_id:
-            self.db.tokens.remove({"_id": ObjectId(token_id)})
+            self.db.tokens.delete_one({"_id": ObjectId(token_id)})
             self.redirect("/applications/%s/tokens" % appname)
             return
         if page:

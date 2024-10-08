@@ -31,7 +31,7 @@ from hashlib import sha1
 from os import path
 from pymongo.errors import CollectionInvalid
 from tornado.options import define, options
-from util import *
+from util import get_password
 import logging
 import pymongo
 import tornado.options
@@ -61,9 +61,9 @@ if __name__ == "__main__":
     mongodb = pymongo.MongoClient(options.mongouri)
     masterdb = mongodb[options.masterdb]
 
-    collection_names = masterdb.collection_names()
+    collection_names = masterdb.list_collection_names()
     try:
-        if not "applications" in collection_names:
+        if "applications" not in collection_names:
             masterdb.create_collection("applications")
             logging.info("db.applications installed")
     except CollectionInvalid as ex:
@@ -71,10 +71,10 @@ if __name__ == "__main__":
         pass
 
     try:
-        if not "managers" in collection_names:
+        if "managers" not in collection_names:
             masterdb.create_collection("managers")
             #  masterdb.managers.ensure_index("username", unique=True)
-            masterdb.managers.ensure_index("email", unique=True)
+            masterdb.managers.create_index([('email', pymongo.ASCENDING)], unique=True)
             logging.info("db.managers installed")
             try:
                 user = masterdb.managers.find_one({"email": EMAIL})
@@ -85,7 +85,7 @@ if __name__ == "__main__":
                         DEFAULTPASSWORD, options.passwordsalt
                     )
                     manager["orgid"] = 0
-                    masterdb["managers"].insert(manager)
+                    masterdb["managers"].insert_one(manager)
                     logging.info(
                         "Admin user created, username: %s, password: %s"
                         % (EMAIL, DEFAULTPASSWORD)
@@ -98,7 +98,7 @@ if __name__ == "__main__":
         pass
 
     try:
-        if not "options" in collection_names:
+        if "options" not in collection_names:
             masterdb.create_collection("options")
             logging.info("db.options installed")
             try:
@@ -107,7 +107,7 @@ if __name__ == "__main__":
                     option_ver = {}
                     option_ver["name"] = "version"
                     option_ver["value"] = VERSION
-                    masterdb["options"].insert(option_ver)
+                    masterdb["options"].insert_one(option_ver)
                     logging.info(("Version number written: %s" % VERSION))
             except Exception:
                 logging.error("Failed to write version number")

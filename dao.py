@@ -1,4 +1,5 @@
 from typing import Dict
+from bson import ObjectId
 import logging
 
 
@@ -19,11 +20,12 @@ class Dao:
         return self.masterdb.applications.find_one({"shortname": name})
 
     def update_app_by_name(self, name: str, app: Dict[str, str]):
-        self.masterdb.applications.update({"shortname": name}, app)
+        values = {"$set": app}
+        self.masterdb.applications.update_one({"shortname": name}, values)
 
     def find_token(self, token):
         logging.info("find token: %s" % token)
         return self.db.tokens.find_one({"token": token})
 
     def add_token(self, token: Dict[str, str]):
-        return self.db.tokens.insert(token)
+        return self.db.tokens.insert_one(token)

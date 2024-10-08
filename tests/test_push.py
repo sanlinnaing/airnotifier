@@ -23,7 +23,7 @@ class CollectionAPI:
     def find_one(self, xxx):
         return {"permission": 31}
 
-    def insert(self, xxx):
+    def insert_one(self, xxx):
         pass
 
 

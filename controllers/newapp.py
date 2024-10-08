@@ -27,9 +27,10 @@
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import tornado.web
-from controllers.base import *
+from controllers.base import WebBaseHandler
 from util import filter_alphabetanum
-
+from pymongo import DESCENDING
+from routes import route
 from constants import (
     DEVICE_TYPE_IOS,
     VERSION,
@@ -82,7 +83,7 @@ class AppCreateNewHandler(WebBaseHandler):
 
         current_app = self.masterdb.applications.find_one({"shortname": self.appname})
         if not current_app:
-            self.masterdb.applications.insert(app)
+            self.masterdb.applications.insert_one(app)
             indexes = [("created", DESCENDING)]
             self.db["tokens"].create_index(indexes)
             self.db["logs"].create_index(indexes)

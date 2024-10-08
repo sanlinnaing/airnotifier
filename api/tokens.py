@@ -46,7 +46,7 @@ class TokenV2HandlerGet(APIBaseHandler):
             return
 
         try:
-            result = self.db.tokens.remove({"token": token})
+            result = self.db.tokens.delete_one({"token": token})
             if result["n"] == 0:
                 self.send_response(NOT_FOUND, dict(status="Token does't exist"))
             else:
@@ -76,23 +76,27 @@ class TokenV2Handler(APIBaseHandler):
                 return
             try:
                 binascii.unhexlify(devicetoken)
-            except Exception as ex:
+            except Exception:
                 self.send_response(BAD_REQUEST, dict(error="Invalid token"))
 
         token = EntityBuilder.build_token(devicetoken, device, self.appname, channel)
         try:
-            result = self.db.tokens.update(
+            result = self.db.tokens.update_one(
                 {"device": device, "token": devicetoken, "appname": self.appname},
-                token,
+                {"$set": token},
                 upsert=True,
             )
             # result
             # {u'updatedExisting': True, u'connectionId': 47, u'ok': 1.0, u'err': None, u'n': 1}
-            if result["updatedExisting"]:
+            print(result)
+            if result.modified_count > 0:
                 self.add_to_log("Token exists", devicetoken)
                 self.send_response(OK)
-            else:
+            elif result.upserted_id is not None:
                 self.add_to_log("Add token", devicetoken)
+                self.send_response(OK)
+            elif result.matched_count > 0:
+                self.add_to_log("No update because of same token", devicetoken)
                 self.send_response(OK)
         except Exception as ex:
             self.send_response(INTERNAL_SERVER_ERROR, dict(error=str(ex)))

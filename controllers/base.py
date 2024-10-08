@@ -28,14 +28,15 @@
 
 from routes import route
 import platform
+import sys
+import os
 import tornado.web
 import time
 from constants import DEVICE_TYPE_IOS, VERSION
 from pymongo import DESCENDING
-from util import *
+from util import get_password
 from tornado.options import options
-from dao import Dao
-import sys
+from bson import ObjectId
 
 
 def buildUpdateFields(params):
@@ -46,7 +47,7 @@ def buildUpdateFields(params):
 
 def normalize_tokens(tokens):
     for token in tokens:
-        if not "device" in token:
+        if "device" not in token:
             token["device"] = DEVICE_TYPE_IOS
     return tokens
 
@@ -107,11 +108,11 @@ class WebBaseHandler(tornado.web.RequestHandler):
     def get_current_user(self):
         """ Get current user from cookie """
 
-        userid = self.get_secure_cookie("user")
-        if not userid:
+        cookie_user_id = self.get_secure_cookie("user")
+        if not cookie_user_id:
             return None
-        userId = ObjectId(userid.decode("utf-8"))
-        user = self.masterdb.managers.find_one({"_id": userId})
+        user_id = ObjectId(cookie_user_id.decode("utf-8"))
+        user = self.masterdb.managers.find_one({"_id": user_id})
         return user
 
     def render_string(self, template_name, **kwargs):
@@ -151,7 +152,7 @@ class AppDeletionHandler(WebBaseHandler):
         app = self.masterdb.applications.find_one({"shortname": appname})
         if not app:
             raise tornado.web.HTTPError(500)
-        self.masterdb.applications.remove({"shortname": appname})
+        self.masterdb.applications.delete_one({"shortname": appname})
         self.mongodbconnection.drop_database(appname)
         self.redirect(r"/applications")
 
@@ -182,7 +183,7 @@ class AppLogViewHandler(WebBaseHandler):
         self.appname = appname
         now = int(time.time())
         thirtydaysago = now - 60 * 60 * 24 * 30
-        self.db.logs.remove({"created": {"$lt": thirtydaysago}})
+        self.db.logs.delete_one({"created": {"$lt": thirtydaysago}})
         self.redirect(r"/applications/%s/logs" % appname)
 
 
@@ -264,7 +265,7 @@ class AdminHandler(WebBaseHandler):
         if self.get_argument("delete", None):
             user_id = self.get_argument("delete", None)
             if user_id:
-                self.masterdb.managers.remove({"_id": ObjectId(user_id)})
+                self.masterdb.managers.delete_one({"_id": ObjectId(user_id)})
                 self.redirect("/admin/managers")
                 return
         currentuser_orgid = self.currentuser["orgid"]
@@ -296,11 +297,11 @@ class AdminHandler(WebBaseHandler):
                 user["orgid"] = int(self.get_argument("orgid", 0))
             else:
                 user["orgid"] = currentuser_orgid
-            result = self.masterdb.managers.update(
-                {"email": user["email"]}, user, upsert=True
+            result = self.masterdb.managers.update_one(
+                {"email": user["email"]}, {"$set": user}, upsert=True
             )
             managers = self.masterdb.managers.find()
-            if result["updatedExisting"]:
+            if result.modified_count > 0:
                 self.render(
                     "managers.html",
                     managers=managers,
@@ -319,7 +320,7 @@ class AdminHandler(WebBaseHandler):
         elif action == "changepassword":
             password = self.get_argument("newpassword").strip()
             passwordhash = get_password(password, options.passwordsalt)
-            self.masterdb.managers.update(
+            self.masterdb.managers.update_one(
                 {"email": self.currentuser["email"]},
                 {"$set": {"password": passwordhash}},
             )

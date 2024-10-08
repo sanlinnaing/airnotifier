@@ -30,9 +30,15 @@ import logging
 import tornado
 import os
 import pymongo
-from bson import *
-from constants import *
+from bson import ObjectId
 from tornado.options import define, options
+from constants import (
+    DEVICE_TYPE_IOS,
+    KEY_APNS_AUTHKEY,
+    KEY_APNS_BUNDLEID,
+    KEY_APNS_KEYID,
+    KEY_APNS_TEAMID,
+)
 
 define("mongouri", default="mongodb://localhost:27017/", help="MongoDB host name")
 define("masterdb", default="airnotifier", help="MongoDB DB to store information")
@@ -56,27 +62,28 @@ if __name__ == "__main__":
         for app in apps:
             appname = app["shortname"]
             appid = ObjectId(app["_id"])
-            ## Repair application setting collection
-            if not "blockediplist" in app:
+            # Repair application setting collection
+            if "blockediplist" not in app:
                 app["blockediplist"] = ""
-            if not "description" in app:
+            if "description" not in app:
                 app["description"] = ""
-            if not "gcmprojectnumber" in app:
+            if "gcmprojectnumber" not in app:
                 app["gcmprojectnumber"] = ""
-            if not "gcmapikey" in app:
+            if "gcmapikey" not in app:
                 app["gcmapikey"] = ""
-            masterdb.applications.update({"_id": appid}, app, upsert=True)
+            masterdb.applications.update_one({"_id": appid}, {"$set": app}, upsert=True)
 
-            ## Adding device to token collections
+            # Adding device to token collections
             db = mongodb[appprefix + appname]
             tokens = db["tokens"].find()
             for token in tokens:
                 tokenid = ObjectId(token["_id"])
-                if not "device" in token:
+                if "device" not in token:
                     token["device"] = DEVICE_TYPE_IOS
-                    result = db["tokens"].update({"_id": tokenid}, token, upsert=True)
+                    result = db["tokens"].update_one(
+                        {"_id": tokenid}, {"$set": token}, upsert=True)
 
-        r = masterdb["options"].update(
+        r = masterdb["options"].update_one(
             {"name": "version"}, {"$set": {"value": 20140315}}, upsert=True
         )
         version_object = masterdb["options"].find_one({"name": "version"})
@@ -86,24 +93,24 @@ if __name__ == "__main__":
         for app in apps:
             appname = app["shortname"]
             appid = ObjectId(app["_id"])
-            ## Repair application setting collection
-            if not "wnsclientid" in app:
+            # Repair application setting collection
+            if "wnsclientid" not in app:
                 app["wnsclientid"] = ""
-            if not "wnsclientsecret" in app:
+            if "wnsclientsecret" not in app:
                 app["wnsclientsecret"] = ""
-            if not "wnsaccesstoken" in app:
+            if "wnsaccesstoken" not in app:
                 app["wnsaccesstoken"] = ""
-            if not "wnstokentype" in app:
+            if "wnstokentype" not in app:
                 app["wnstokentype"] = ""
-            if not "wnstokenexpiry" in app:
+            if "wnstokenexpiry" not in app:
                 app["wnstokenexpiry"] = ""
-            masterdb.applications.update_one({"_id": appid}, app, upsert=True)
+            masterdb.applications.update_one({"_id": appid}, {"$set": app}, upsert=True)
         masterdb["options"].update_one(
             {"name": "version"}, {"$set": {"value": 20140720}}, upsert=True
         )
 
     if version < 20140814:
-        ## Don't store fullpath in db, only filename
+        # Don't store fullpath in db, only filename
         import os
 
         apps = masterdb.applications.find()
@@ -118,7 +125,7 @@ if __name__ == "__main__":
                 app["mpnscertificatefile"] = os.path.basename(
                     app.get("mpnscertificatefile")
                 )
-            masterdb.applications.update_one({"_id": appid}, app, upsert=True)
+            masterdb.applications.update_one({"_id": appid}, {"$set": app}, upsert=True)
         masterdb["options"].update_one(
             {"name": "version"}, {"$set": {"value": 20140814}}, upsert=True
         )
@@ -128,14 +135,14 @@ if __name__ == "__main__":
         for app in apps:
             appname = app["shortname"]
             appid = ObjectId(app["_id"])
-            ## Repair application setting collection
-            if not "clickatellusername" in app:
+            # Repair application setting collection
+            if "clickatellusername" not in app:
                 app["clickatellusername"] = ""
-            if not "clickatellpassword" in app:
+            if "clickatellpassword" not in app:
                 app["clickatellpassword"] = ""
-            if not "clickatellappid" in app:
+            if "clickatellappid" not in app:
                 app["clickatellappid"] = ""
-            masterdb.applications.update_one({"_id": appid}, app, upsert=True)
+            masterdb.applications.update_one({"_id": appid}, {"$set": app}, upsert=True)
         masterdb["options"].update_one(
             {"name": "version"}, {"$set": {"value": 20140820}}, upsert=True
         )
@@ -145,7 +152,7 @@ if __name__ == "__main__":
         for app in apps:
             appname = app["shortname"]
             db = mongodb[appprefix + appname]
-            indexes = [("created", DESCENDING)]
+            indexes = [("created", pymongo.DESCENDING)]
             logging.info(
                 ("Adding index to %s%s['tokens'].%s" % (appprefix, appname, "created"))
             )
@@ -169,18 +176,18 @@ if __name__ == "__main__":
         for user in users:
             #  appname = app["shortname"]
             # Repair application setting collection
-            if not "orgid" in user:
+            if "orgid" not in user:
                 masterdb.managers.find_one_and_update(
                     {"username": user["username"]}, {"$set": {"orgid": 0}}
                 )
-            if not "email" in user:
+            if "email" not in user:
                 masterdb.managers.find_one_and_update(
                     {"username": user["username"]},
                     {"$set": {"email": user["username"]}},
                 )
         apps = masterdb.applications.find()
         for app in apps:
-            if not "orgid" in app:
+            if "orgid" not in app:
                 masterdb.applications.find_one_and_update(
                     {"shortname": app["shortname"]}, {"$set": {"orgid": 0}}
                 )
@@ -195,7 +202,7 @@ if __name__ == "__main__":
             {"name": "version"}, {"$set": {"value": 20190825}}, upsert=True
         )
     if version < 20191117:
-        masterdb.managers.ensure_index("email", unique=True)
+        masterdb.managers.create_index([('email', pymongo.ASCENDING)], unique=True)
         try:
             masterdb.managers.drop_index("user")
         except Exception as ex:
@@ -209,16 +216,16 @@ if __name__ == "__main__":
         for app in apps:
             appname = app["shortname"]
             appid = ObjectId(app["_id"])
-            if not KEY_APNS_AUTHKEY in app:
+            if KEY_APNS_AUTHKEY not in app:
                 app[KEY_APNS_AUTHKEY] = ""
-            if not KEY_APNS_BUNDLEID in app:
+            if KEY_APNS_BUNDLEID not in app:
                 app[KEY_APNS_BUNDLEID] = ""
-            if not KEY_APNS_KEYID in app:
+            if KEY_APNS_KEYID not in app:
                 app[KEY_APNS_KEYID] = ""
-            if not KEY_APNS_TEAMID in app:
+            if KEY_APNS_TEAMID not in app:
                 app[KEY_APNS_TEAMID] = ""
-            masterdb.applications.update({"_id": appid}, app, upsert=True)
-            masterdb.applications.update(
+            masterdb.applications.update_one({"_id": appid}, {"$set": app}, upsert=True)
+            masterdb.applications.update_one(
                 {"_id": appid},
                 {
                     "$unset": {
