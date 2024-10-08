@@ -4,7 +4,7 @@
 from . import PushService
 from util import json_encode
 import logging
-import hyper
+import httpx
 import jwt
 import time
 
@@ -32,8 +32,7 @@ class ApnsClient(PushService):
         self.instanceid = kwargs["instanceid"]
         self.last_token_refresh = 0
         self.token = None
-        self.http2 = hyper.HTTPConnection(BASE_URL_PROD)
-        #  self.http2dev = hyper.HTTPConnection(BASE_URL_DEV)
+        self.http2 = httpx.Client(http2=True)
 
     def create_token(self):
         now = time.time()
@@ -47,7 +46,7 @@ class ApnsClient(PushService):
                 headers={"alg": ALGORITHM, "kid": self.key_id},
             )
             self.last_token_refresh = now
-            self.token = token.decode("ascii")
+            self.token = token
         return self.token
 
     def build_headers(self, push_type="alert"):
@@ -88,17 +87,20 @@ class ApnsClient(PushService):
         # https://developer.apple.com/library/archive/documentation/NetworkingInternet/Conceptual/RemoteNotificationsPG/PayloadKeyReference.html#//apple_ref/doc/uid/TP40008194-CH17-SW1
         payload_data = {"aps": {"alert": alert, **filtered_apns}}
         self.payload = json_encode(payload_data)
+        
+        # byte_token = token.encode('utf-8')
+        # device_token = ''.join([f'{byte:02x}' for byte in byte_token])
 
-        PATH = "/3/device/{0}".format(token)
+        PATH = f"https://{BASE_URL_PROD}/3/device/{token}"
         self.headers = self.build_headers(push_type=apns["push_type"])
 
-        self.http2.request("POST", PATH, self.payload, headers=self.headers)
-        resp = self.http2.get_response()
+        resp = self.http2.post(PATH, json=self.payload, headers=self.headers)
+        logging.info(f"Apple APNS response HTTP version: {resp.http_version}")
 
-        if resp.status >= 400:
+        if resp.status_code >= 400:
             #  headers = resp.headers
             #  for k, v in headers.items():
             #      logging.error("%s: %s" % (k.decode("utf-8"), v.decode("utf-8")))
-            body = resp.read().decode("utf-8")
+            body = resp.json()
             logging.error(body)
             raise ApnsException(400, body)
